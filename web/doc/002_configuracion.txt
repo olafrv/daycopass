@@ -1,0 +1,152 @@
+-------------------------------
+ Archivo de Configuracion 
+-------------------------------
+
+El archivo de configuracion o inicializacion es un archivo de texto plano
+ubicado en "/home/daycopass/daycopass.ini" cuyo formato cumple con el 
+estandar de archivo INI de configuracion de PHP:
+
+ http://php.net/manual/en/function.parse-ini-file.php
+
+Se carga a traves del archivo "config.php". Las variables definidas en este
+archivo INI sobreescriben a aquellas utilizadas en el codigo de la aplicacion 
+e identificadas como "$DAYCOPASS_*".
+
+Esta conformado por 3 secciones: [database], [security] y [override].
+
+Las variables de tipo (string) deben ir entre comillas dobles y pueden
+ser multilineales siempre y cuando se definan de la siguiente forma:
+
+variable = "
+texto inicial
+texto de prueba 1
+...
+texto de prueba 2
+texto final
+"
+
+Las variables de tipo arreglo se define de la siguiente forma:
+variable["indice1"] =  numero
+variable["indice2"] =  "cadena"
+
+
+-------------------------------------------
+ Configuracion de base de datos [database]
+-------------------------------------------
+
+En la seccion [database] se define la conectividad con el servidor de base
+de datos MySQL:
+
+- server (string): direccion IP o nombre DNS de servidor. 
+
+- database (string): nombre del esquema o base de datos.
+
+- user (string): usuario de acceso a la base de datos.
+
+- password (string): contraseÃ±a del usuario de base de datos.
+
+
+---------------------------------------
+ Configuracion de seguridad [security]
+---------------------------------------
+
+En la seccion [security] se define la semilla con la cual se cifran las
+claves en la base de datos:
+
+- salt (string): es una cadena de 64 digitos hexadecimales.
+
+
+------------------------------------------------
+ Configuracion de variables globales [override]
+------------------------------------------------
+
+En la ultima seccion [override] se definen el resto de las variables globales:
+
+- admin_level (string): El nivel numerico (10000) asignado al usuario admin.
+  El usuario admin debe ser usado solo en emergencias, tales como: fallas en 
+  mecanismos de auntenticacion (LDAP/IMAP), permisos revocados erroneamente 
+  u otros.
+
+- admin_pw (string): La clave del usuario admin.
+
+- captcha (boolean): Si es verdadero (true) activa el uso de Captcha (Login). 
+
+- disable_level (integer): Usuario con nivel <= (-1) a este numero quedan deshabilitados.
+
+- guacamole_url (string): URL de acceso a Daycomole que sirve de integracion con 
+  Guacamole. Puede dejar en blanco o "http://guacamole:8080/daycomole-0.1.0". 
+  El host "guacamole" debe estar definido en /etc/hosts
+
+- imap_server (string) = mail.example.com (Solo para autenticacion de usuarios)
+
+- ldap_basedb (string) = "OU=Users,DC=example,DC=com" 
+
+- ldap_binddn (string) = "CN=DaycoPass,OU=Users,DC=example,DC=com"
+
+- ldap_bindpw (string) = Clave del usuario binddn de LDAP 
+
+- ldap_filter (string) = "(&(mail=%U%@example.com)(objectclass=user))"
+
+- ldap_server (string) = Direccion IP del servidor de directorio activo (LDAP),
+                         utilizado para la autenticacion de los usuarios.
+
+- mail_auth (boolean) = Autenticacion via IMAP. Solo aplica si no se activa la 
+                        autenticacion LDAP.
+
+- mail_from = "abuse@example.com"
+
+- mail_login (string) = Dejar en blanco si no se requiere auntenticacion, 
+                        colocando "mail_login ="  
+
+- mail_password (string) = Dejar en blanco si no se requiere autenticacion,
+                           colocando "mail_password ="
+
+- mail_port (integer) = 25
+
+- mail_server (string) = mail.example.com (Solo para envio de correos electronicos).
+
+- mail_tls (boolean) = La auntenticacion IMAP requiere SSL/TLS
+
+- mail_unblock_body = "
+ Estimado %user%,
+ 	
+ Su cuenta ha sido bloqueada debido a que ha sobrepasado la
+ cantidad maxima de intentos de inicio de sesion fallidos.
+ 
+ Si desea desbloquear su cuenta haga clic en el siguiente vinculo,
+ el cual expira dentro de 1 hora(s):
+ 
+ %url%/unlock.php?token=unlock,%user%,%token%
+
+ Si Usted desconoce porque se ha provocado el bloqueo, notifique 
+ inmediatamente al Area de Seguridad de la VP de Operaciones."
+
+- mail_unblock_subject = "Cuenta '%user%' bloqueada (DaycoPass)"
+
+- mail_warn_address = Direccion a la cual enviar los correos de notificaciones
+                      de incidentes de seguridad, puede ser root@localhost
+
+- max_failed_logins (integer) = Bloquear usuarios despues este numero de intentos
+                                fallidos de acceso (Recomendado 5).
+
+- only_syslog (boolean) = Enviar registros de bitacora al syslog.
+
+- readonly (boolean) = Aplicacion en modo de solo lectura, por lo tanto, todas
+                       las funciones que modifican la base de datos dejaran de 
+                       funcionar, especialmente OTT, bitacora (LOG) en tabla de
+                       base de datos.
+
+- sqlmodes (string) = En caso de MySQL 5.7 su valor debe ser igual al siguiente texto 
+  "ONLY_FULL_GROUP_BY,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"
+  para evitar error de inserccion en campos de fecha debido a modos estrictos para tablas
+  y campos DATE, TIME y DATETIME de MySQL.
+
+- title (string) = Titulo en la ventana del navegador Web.
+                   Usualmente "DaycoPass (PRD)".
+
+- tokens (array) = Indice: IP, Valor: 32 digitols alfanumerico (Token).
+                   Puede dejarse en blanco, colocado "tokens ="
+
+- url (string) = Dirrecion URL completa de acceso a DaycoPass.
+                 (e.g. https://daycopass.example.com:443)
+

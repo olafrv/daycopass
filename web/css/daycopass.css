@@ -1,0 +1,21 @@
+/* Generales */
+body,font,input,select { font-family: sans-serif; font-size: 11px; }
+table,tbody,thead { font-family: sans-serif; font-size: 11px; }
+table { border: none; border-collapse: collapse; }
+tr,th,td { font-family: sans-serif; font-size: 11px; }
+th { background-color: black; color: white; }
+input.transparente{ background: transparent; border: none; border-color: transparent; }
+
+/* DataTable */
+#tablaResultado	tr:hover { background-color: #EBF7EB; }
+#tablaResultado td:hover { background-color: #99C2FF; }
+
+/* Ambiente de solo lectura */
+.blink_me { animation: blinker 4s linear infinite; }
+@keyframes blinker {  
+    0%   {background-color:red; left:0px; top:0px;}
+    25%  {background-color:orange; left:200px; top:0px;}
+    50%  {background-color:blue; left:200px; top:200px;}
+    75%  {background-color:green; left:0px; top:200px;}
+    100% {background-color:red; left:0px; top:0px;}
+}

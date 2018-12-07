@@ -1,0 +1,50 @@
+# Inicio de sesion (Login)
+- Usuario (sin especificar clave)
+- Usuario no registrado
+- Usuario registrado (LDAP / IMAP)
+- Usuario deshabilitado (bloqueado) por fallos AAA
+- Usuario desbloqueado via e-mail de auto-desbloqueo
+- Usuario admin (Ver clave en daycopass.ini)
+- Cerrar sesion (Logout)
+
+# Autenticacion por Token
+- Usuario (E-Mail de Desbloqueo)
+- Sistema (Crawler)
+- OTT (Guacamole)
+
+# Busqueda de Credenciales (Usuarios => Nivel 10000 y menor)
+- Generar clave aleatoria (Utilitario)
+- Buscar por frase (id, categoria, servicio, usuario, url, nota, nivel, fecha)
+- Buscar por categoria (combo desplegable)
+- Filtrar por invalido (original e historial)
+- Ver clave y nota de credenciales
+- Editar/Agregar una credencial:
+  - Visualizar la original vs. cambios en el historial.
+  - Cambiar categoria/servicio con una existente y una nueva (creada).
+  - Cambiar tipo de servicio, usuario, clave (regenerar), nivel, validez, url y nota.
+- Conectar a un servidor de forma remota (Guacamole)
+
+# Categorias (Solo admins => Nivel 10000)
+- Agregar
+- Modificar
+
+# Usuarios (Solo admins => Nivel 10000)
+- Agregar y modificar usuarios (nivel)
+- Deshabilitar un usuario (Cambiar nivel a -1)
+- Desbloquear usuarios
+
+# Bitacora (Solo admins => Nivel 10000)
+- Buscar por campos (id, direccion, usuario, log, fecha)
+- Buscar frase = 1 y mostrar mas registros de la bitacora (>100)
+- Envio de registro al syslog del sistema operativo
+
+# Modo de solo lectura
+- Agregar/Modificar para todos los items previos.
+
+# Consola /Terminal / CLI (Manual de instalacion)
+- Probar la ejecucion de un backup.sh/restore.sh (parcial/total).
+- Probar la ejecucion del scripts de ajustes de permisos (permissions.sh).
+- Probar el envio de correo electronico (php mailtest.php).
+
+- 
+

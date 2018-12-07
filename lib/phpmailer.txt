@@ -1,0 +1,31 @@
+# Librerias para envio de correo en PHP incluidas
+# como parte del codigo fuente de DaycoPass, no se
+# requiere una instalacion por separado
+
+# http://phpmailer.worxware.com/
+# https://github.com/PHPMailer/PHPMailer
+# cd daycopass/lib$ curl -sS https://getcomposer.org/installer | php
+# >> Composer successfully installed to: /home/daycopassdev/daycopass/lib/composer.phar
+# vim composer.json
+# php composer.phar install
+# >> Loading composer repositories with package information
+# >> Installing dependencies (including require-dev)
+# >>  - Installing phpmailer/phpmailer (v5.2.10)
+# >>    Downloading: 100%
+# >> 
+# >> Writing lock file
+# >> Generating autoload files
+
+# cd daycopass/lib$
+# php composer.phar update
+# Warning: This development build of composer is over 60 days old. It is recommended to update it by running "composer.phar self-update" to get the latest version.
+# >> Loading composer repositories with package information
+# >> Updating dependencies (including require-dev)
+# >> - Removing phpmailer/phpmailer (v5.2.10)
+# >> - Installing phpmailer/phpmailer (v5.2.16)
+# >>   Downloading: 100%
+# >>
+# >> Writing lock file
+# >> Generating autoload files
+
+

@@ -1,0 +1,271 @@
+# Instalacion
+
+# Sistema Operativo (Certificado): 
+Ubuntu Linux 14.04 LTS Server Edition 64 bits
+
+#########################################################################
+# A partir de aqui todos los comandos se ejecutan como root o con sudo! #
+#########################################################################
+
+# Actualice paquetes el sistma operativo (seguridad)
+sudo apt-get -y update
+sudo apt-get -y dist-upgrade
+
+# Desactive todos los servicios innecesarios (Algunos Ejemplos)
+# especialmente si no se requiere interfaz grafica X
+# sudo service ondemand stop
+# sudo update-rc.d ondemand disable
+# sudo chmod -x /etc/init.d/ondemand
+# sudo apt-get purge dbus
+
+# Apache, PHP (Web + CLI) y librerias (IMAP,JSON, MCRYPT)
+sudo apt-get -y install apache2 libapache2-mod-php5
+sudo apt-get -y install php5-imap php5-ldap php5-json php5-mcrypt php5-gd php5-cli
+sudo apt-get -y install subversion-tools
+
+# Activar PHP MCrypt en la Web y a nivel de CLI
+# para vefiricar en CLI ejecute "php -m | grep mcrypt"
+# y en apache utilice la funcion "phpinfo();"
+sudo ln -s /etc/php5/mods-available/mcrypt.ini /etc/php5/cli/conf.d/30-mcrypt.ini
+sudo ln -s /etc/php5/mods-available/mcrypt.ini /etc/php5/apache2/conf.d/30-mcrypt.ini
+
+# MySQL 
+# Debera configurar un password para el usuario root de MySQL,
+# introducir ese password cuando sea exigido por dbconfig-common
+# para realizar tareas de instalacion automatizadas, y finalmente,
+# dejar el password en blanco para phpmyadmin para que se genere
+# uno aleatorio.
+sudo apt-get -y install mysql-client mysql-server php5-mysql
+
+# PHPMyAdmin (Solo en desarrollo)
+# Si no se usa dbconfig-common se debera realizar la configuracion
+# de phpmyadmin de forma completamente manual la creacion de base
+# de datos y otros relacionados.
+sudo apt-get -y install phpmyadmin
+
+# Activacion de redireccion URL en Apache
+sudo a2enmod rewrite 
+
+# Ajustes basicos de seguridad en Apache 
+sudo a2enmod headers
+sudo vim /etc/apache2/conf-enabled/security.conf
+
+# Puede afectar rutas que no permisadas
+# por defecto en su configuracion (Ej. /icons)
+<Directory />
+   AllowOverride None
+   Order Deny,Allow
+   Deny from all
+</Directory>
+# Corregir error de Multiview (Icons)
+<Location /icons>
+	Allow from all
+</Location>
+ServerTokens Minimal
+ServerSignature Off
+TraceEnable Off
+<DirectoryMatch "/\.svn">
+   Require all denied
+</DirectoryMatch>
+Header set X-Content-Type-Options: "nosniff"
+Header set X-Frame-Options: "sameorigin"
+# https://www.owasp.org/index.php/HTTP_Strict_Transport_Security
+Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+# Afecta a versiones de PHPMyAdmin
+# Header always set X-Frame-Options DENY
+
+# Ajuste de seguridad ante ataques de DDoS
+sudo apt-get -y install libapache2-mod-evasive
+sudo a2enmod evasive
+sudo vim /etc/apache2/mods-enabled/evasive.conf
+
+<IfModule mod_evasive20.c>
+    DOSHashTableSize    3097
+    DOSPageCount        2
+    DOSSiteCount        50
+    DOSPageInterval     1
+    DOSSiteInterval     1
+    DOSBlockingPeriod   10
+
+    DOSEmailNotify      root@localhost
+    #DOSSystemCommand    "su - someuser -c '/sbin/... %s ...'"
+    #DOSLogDir           "/var/log/mod_evasive"
+    DOSWhitelist 127.0.0.1
+    DOSWhitelist 127.0.0.*
+    DOSWhitelist 10.0.*.*
+    DOSWhitelist 10.1.*.*
+</IfModule>
+
+# Configuracion de SSL (HTTPS)
+
+# Forzar SSL en Apache (:80)
+sudo vim /etc/apache2/sites-enabled/000-default.conf
+
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule (.*) https://%{HTTP_HOST}%{REQUEST_URI}
+
+# Ajustar la configuracion SSL
+sudo a2enmod ssl
+sudo vim /etc/apache2/mods-available/ssl.conf
+
+SSLProtocol all -SSLv3 -SSLv2
+SSLCipherSuite AES128+EECDH:AES128+EDH
+SSLCompression off
+SSLInsecureRenegotiation off
+
+# Activar la configuracion SSL (:443)
+# y comentar directiva NameVirtualHost
+# para el puerto *:443 (SSL)
+sudo a2dissite default-ssl
+#sudo mv /etc/apache2/sites-enabled/default-ssl.conf /etc/apache2/sites-enabled/000-default-ssl.conf
+#sudo a2dissite 000-default-ssl
+#sudo vim /etc/apache2/sites-enabled/000-default-ssl.conf
+#NameVirtualHost *:443
+
+# Proteger y Restringir PHPMyAdmin
+# Para su uso solo por el administrador
+# de base de datos con IP = 10.0.0.X
+sudo vim /etc/apache2/conf-enabled/phpmyadmin.conf
+
+<Directory /usr/share/phpmyadmin>
+(...)
+	Order Allow,Deny
+	#	Allow from all
+	Allow from 10.0.0.*
+(...)
+</Directory>
+# Authorize for setup
+<Directory /usr/share/phpmyadmin/setup>
+    Order Deny,Allow
+    Deny from All
+#    <IfModule mod_authn_file.c>
+#    AuthType Basic
+#    AuthName "phpMyAdmin Setup"
+#    AuthUserFile /etc/phpmyadmin/htpasswd.setup
+#    </IfModule>
+#    Require valid-user
+</Directory>
+
+# Configuracion de PHP 
+sudo vim /etc/php5/apache2/php.ini
+
+expose_php = Off
+display_errors = Off
+log_errors = On
+session.gc_maxlifetime = 21600
+session.cookie_secure = 1
+session.cookie_lifetime = 21600
+session.cookie_httponly = 1
+
+# Deshabilite SELinux (Compatibilidad)
+#sudo vim /etc/selinux/config
+#SELINUX=disabled
+sudo apt-get --purge remove selinux
+
+# Deshabilite App Armor (Compatibilidad)
+sudo apt-get --purge remove apparmor
+
+# Configuracion de bitacoras (LOG)
+sudo vim /etc/rsyslog.d/00-daycopass.conf
+
+:syslogtag,contains,"daycopass[" /var/log/daycopass/daycopass.log
+& ~
+
+# Reiniciar el servicio de bitacoras (LOG)
+sudo service rsyslog restart
+
+# Configurar la rotacion de la bitacora (LOG)
+sudo mkdir /var/log/daycopass
+sudo chown syslog:adm /var/log/daycopass
+sudo vim /etc/logrotate.d/daycopass
+
+/var/log/daycopass/daycopass.log {
+  daily
+  rotate 1000
+  missingok
+  compress
+  delaycompress
+  notifempty
+  create 640 syslog adm
+  su syslog adm
+}
+
+# Probar la rotacion de la bitacora
+sudo logrotate -dv -f /etc/logrotate.d/daycopass
+
+# Crear usuario de sistema operativo (daycopass or another)
+sudo adduser daycopass --shell /bin/bash
+
+# Agregar el usuario en el /etc/sudoers
+sudo visudo 
+
+daycopass       ALL=(ALL:ALL) ALL
+
+###############################################################################
+# Apartir de aqui todos los comandos se ejecutan como el usuario daycopass!!! #
+###############################################################################
+
+# Iniciar sesion como usuario de sistema operativo
+# para instalar (de aqui en adelante) en el directorio
+# del usuario /home/daycopass
+su - daycopass
+
+# Crear el archivo de inicio de la aplicacion segun se describe en CONFIG.TXT
+# Hacer un respaldo del archivo .ini (si existe previamente)
+vim ~/daycopass.ini
+
+# Generar los certificados SSL (Y copiar a los servidores espejo si existen)
+# Hacer un respaldo de los archivos apache.* (si existen previamente)
+openssl req -x509 -nodes -days 900 -newkey rsa:2048 -keyout apache.key -out apache.crt
+
+# Hacer un respaldo del directorio daycopass (si existe previamente)
+mv daycopass daycopass.old.$RANDOM
+
+# OPCION 1: De un respaldo de codigo fuente (tar.gz)
+tar xvfz daycopass.tar.gz
+
+# OPCION 2: Del repositorio SVN (Subversion) de codigo fuente (version?)
+# ubicado en el servidor "svndayco" debe estar definido en /etc/hosts
+svn co --force https://W.X.Y.Z:8080/svn/daycopass/tags/v2.0 daycopass --username=<usuario>
+svn co --force https://W.X.Y.Z:8080/svn/daycopass/tags/v1.0 daycopass --username=<usuario>
+svn co --force https://W.X.Y.Z:8080/svn/daycopass/trunk/ daycopass --username=<usuario>
+
+# Aplicar Configuracion del Servidor Web (Apache) pasando los
+# parametros <Usuario> <Dominio> <Puerto-SSL>
+chmod +x ./daycopass/virtualhost-ubuntu.sh
+sudo ./daycopass/virtualhost-ubuntu.sh daycopass daycopass.daycohost.local 443
+
+# Ajuste de permisos (Directorios 750 y Archivos 640)
+chmod +x ./daycopass/permissions.sh
+./daycopass/permissions.sh
+
+# Creacion de la base de datos (Schema) 
+mysql -u root -p
+mysql> create database `daycopass`;
+mysql> create user daycopass@localhost identified by "**********";
+nysql> grant all privileges on daycopass.* to daycopass@localhost;
+
+# Restauracion de datos (tablas y regitros)
+# Cuidado esto elimina las tablas existentes!!!
+cd ~/daycopass
+
+# Respaldo de archivos y base de datos (cifrada)
+~/daycopass/restore.sh
+
+# Base de datos vacia (sin registros solo esquema)
+cd ~/daycopass
+php dbrestore.php ~/daycopass/doc/999_base_de_datos.sql
+
+# Probar envio de correo electronico en DaycoPass
+cd ~/daycopass
+php mailtest.php
+
+# Ejecutar un respaldo
+~/daycopass/backup.sh
+
+# Configurar la tarea programa de respaldo
+crontab -e
+
+00 21 *  *  *  ~/daycopass/backup.sh | grep -v "Using a password on the command line interface can be insecure"
+

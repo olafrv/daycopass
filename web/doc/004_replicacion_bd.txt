@@ -1,0 +1,403 @@
+##########################################
+# Replicacion MySQL - (Uni)Bidireccional #
+##########################################
+
+Autor: Olaf Reitmaier Veracierta <olafrv@mail.com>
+Última Actualización: 18 de Diciembre de 2017
+
+#################
+# Generalidades #
+#################
+
+Instalar MySQL Server 5.* en ambos nodos maestro y esclavo.
+
+Para habilitar el uso del Global Transaction ID (GTID) se requiere MySQL 5.7.*.
+
+Para la cambiar la contraseña de root de MySQL (escoger uno de los siguientes comandos):
+
+/usr/bin/mysqladmin -u root password 'new-password'
+/usr/bin/mysqladmin -u root -h linux-e3u4-nodo<1> password 'new-password'
+
+Alternativamente, se puede reiniciar las contraseña de root de MySQL como sigue:
+
+/usr/bin/mysql_secure_installation
+
+El cual, también permite eliminar las bases de datos de prueba (test)
+y cualquier usuario anonimo, algo muy recomendado en servidores de producción.
+
+Siempre es importante eliminar el usuario "" (Vacío) de la tabla de usuarios de MySQL:
+
+mysql> DELETE FROM mysql.user WHERE user = "";
+
+En caso que exista previamente una replicación sin GTID es necesario sincronizar ambos servidores previamente, para lo cual se debe colocar ambos servidores en modo de solo lectura y luego proceder con la modificación de la configuración para activar GTID, despues de garantizar que ambos están sincronizados.
+
+mysql> SET @@global.read_only = ON;
+
+Finalmente, despues de configurar la replicación (uni)bidireccional se debe desactivar el modo de solo lectura:
+
+mysql> SET @@global.read_only = OFF;
+
+Para el monitoreo de la replicación se requieren los siguientes privilegios:
+
+CREATE USER 'replica'@'%' IDENTIFIED BY '123456';
+GRANT REPLICATION CLIENT ON *.* TO 'nagios'@'%';
+FLUSH PRIVILEGES;
+
+Los respaldos de los servidores ejecutados con el comando mysqldump deben incluir el parámetro "--master-data".
+
+##################
+# Pre-Requisitos #
+##################
+
+Detener los servidores de MySQL:
+
+mysqladmin -uroot -p shutdown
+
+NOTA: Desde MySQL 5.6 existe el archivo auto.conf que contiene un UUID único para 
+cada servidor. Si se elimina el archivo al iniciar MySQL genera uno nuevo.
+
+Modificar los archivos de configuración en ambos nodos:
+
+NODO #1 /etc/my.cnf (linux-e3u4-nodo1)
+
+[mysqld]
+server-id = 1
+log-bin=mysql1-blog
+log-bin-index=mysql1-bidx
+# Este valor debe ser igual al id del servidor
+auto_increment_offset = 1
+# Este valor debe ser igual al numero de servidores
+auto_increment_increment = 2
+# Activar uso de GTID en la replicacion de transacciones
+gtid_mode=ON
+enforce-gtid-consistency=true
+# Este formato es el mas seguro y consistente
+binlog_format=ROW
+# Añade informacion legible en el log binario por cada query (mysqld -vv)
+#binlog_rows_query_log_events=1
+# Activar si lo binlog ocupan demasiado espacio en disco (backup)
+#binlog_row_image=minimal
+# Mayor durabilidad y consistencia posible en replication InnoDB
+innodb_flush_log_at_trx_commit=1
+sync_binlog=1
+#innodb-safe-binlog
+expire_logs_days=7
+relay-log=mysql1-rlog
+relay-log-index=mysql1-ridx
+#skip-slave-start
+log-slave-updates=1
+# Ignora solo si se ha ejecutado USE <db> antes de las instrucciones
+binlog_ignore_db = mysql,information_schema,performance_schema,phpmyadmin
+replicate_ignore_db = mysql,information_schema,performance_schema,phpmyadmin
+# Nombre reportado al maestro, es un valor errado si hay NAT (Opcional)
+#report-host=linux-e3u4-nodo1
+
+NODO #2 /etc/my.cnf (linux-e3u4-nodo2)
+
+[mysqld]
+server-id = 2
+log-bin=mysql2-blog
+log-bin-index=mysql2-bidx
+# Este valor debe ser igual al id del servidor
+auto_increment_offset = 2
+# Este valor debe ser igual al numero de servidores
+auto_increment_increment = 2
+# Activar uso de GTID en la replicacion de transacciones
+gtid_mode=ON
+enforce-gtid-consistency=true
+# Añade informacion legible en el log binario por cada query (mysqld -vv)
+#binlog_rows_query_log_events=1
+# Este formato es el mas seguro y consistente
+binlog_format=ROW
+# Activar si lo binlog ocupan demasiado espacio en disco (backup)
+#binlog_row_image=minimal
+# Mayor durabilidad y consistencia posible en replication InnoDB
+innodb_flush_log_at_trx_commit=1
+sync_binlog=1
+#innodb-safe-binlog
+expire_logs_days=7
+relay-log=mysql2-rlog
+relay-log-index=mysql2-ridx
+#skip-slave-start
+log-slave-updates=1
+# Ignora solo si se ha ejecutado USE <db> antes de las instrucciones
+binlog_ignore_db = mysql,information_schema,performance_schema,sys,phpmyadmin
+replicate_ignore_db = mysql,information_schema,performance_schema,sys,phpmyadmin
+# Nombre reportado al maestro, es un valor errado si hay NAT (Opcional)
+#report-host=linux-e3u4-nodo2
+
+Iniciar el servicio de MySQL (escoger uno de los siguientes comandos):
+
+service mysql start
+rcmysql start
+
+################################
+# Replicación (Unidireccional) #
+################################
+
+Asegurar que los esclavos estén detenidos:
+
+mysql> STOP SLAVE;
+
+Desconfigurar la replicación (si existe) en ambos nodos:
+
+mysql> RESET SLAVE;
+
+Crear un usuario (si no existe) con los privilegios necesarios para replicar:
+
+mysql> CREATE USER 'replica'@'%' IDENTIFIED BY '123456';
+mysql> GRANT REPLICATION SLAVE ON *.* TO 'replica'@'%';
+
+En caso que se active soporte SSL para el cifrado de la conexión de la replicación:
+
+mysql> GRANT REPLICATION SLAVE ON *.* TO 'replica'@'%' REQUIRE SSL;
+
+Si es necesario revocar los permisos al usuario:
+
+mysql> REVOKE ALL PRIVILEGES ON *.* FROM replica@'%';
+mysql> DROP USER replica@'%';
+
+Para asegurar que los permisos sean aplicados ejecute:
+
+mysql> FLUSH PRIVILEGES;
+
+Si se tiene una base de datos 'XXX' consistente puede restaurarse un respaldo en ambos servidores con el comando:
+
+mysql -u root -p <X> < X.sql
+
+O bien, restaur un respaldo en el servidor inconsistente (eliminar la base de datos 'XXX' previamente):
+
+NODO #2 - Activar replicación (Maestro-Esclavo):
+
+Determinar el estado del servicio maestro de replicación en un nodo 1 (solo si no se ha activado el GTID):
+
+mysql> FLUSH TABLES WITH READ LOCK;
+mysql> SHOW MASTER STATUS \G;
+mysql> EXIT;
+
+Definir como maestro al nodo 1 en el esclave del nodo 2, de acuerdo con los datos mostrados por el comando anterior:
+
+mysql> CHANGE MASTER TO MASTER_HOST='linux-e3u4-nodo1', MASTER_USER='replica', MASTER_PASSWORD='123456', MASTER_LOG_FILE='mysql1-blog.000003', MASTER_LOG_POS=366;
+
+Si se activa el GTID no es necesario espeficar las variables MASTER_LOG_FILE y MASTER_LOG_POS sino MASTER_AUTO_POSITION:
+
+mysql> CHANGE MASTER TO MASTER_HOST = 'host', MASTER_PORT = 'port', MASTER_USER = 'user', MASTER_PASSWORD = 'password', MASTER_AUTO_POSITION = 1;
+
+En caso de activar soporte SSL para el cifrado de las conexiones se debe agregar MASTER_SSL = 1.
+
+Activar la replicaciÓn:
+
+mysql> START SLAVE;
+mysql> SET @@global.read_only = OFF;
+
+Determinar el estado de los esclavo de replicación en el nodo 2:
+
+mysql> SHOW SLAVE STATUS \G
+
+La salida debe arrojar los siguientes valores:
+Slave_IO_Running: Yes
+Slave_SQL_Running: Yes
+Seconds_Behind_Master: 0
+Last_IO_Errno: 0
+Last_SQL_Errno: 0
+
+#############################
+# Replicación Bidireccional #
+#############################
+
+NODO #1 - Activar replicación (Maestro-Esclavo):
+
+Determinar el estado del servicio maestro de replicación en un nodo 2 (solo si no se ha activado el GTID):
+
+mysql> FLUSH TABLES WITH READ LOCK;
+mysql> SHOW MASTER STATUS \G;
+mysql> EXIT;
+
+Definir como maestro al nodo 2 en el esclave del nodo 1, de acuerdo con los datos mostrados por el comando anterior:
+
+mysql> CHANGE MASTER TO MASTER_HOST='linux-e3u4-nodo2', MASTER_USER='replica', MASTER_PASSWORD='123456', MASTER_LOG_FILE='mysql2-blog.000010', MASTER_LOG_POS=107;
+
+Si se activa el GTID no es necesario espeficar las variables MASTER_LOG_FILE y MASTER_LOG_POS sino MASTER_AUTO_POSITION:
+
+mysql> CHANGE MASTER TO MASTER_HOST = 'host', MASTER_PORT = 'port', MASTER_USER = 'user', MASTER_PASSWORD = 'password', MASTER_AUTO_POSITION = 1;
+
+En caso de activar soporte SSL para el cifrado de las conexiones se debe agregar MASTER_SSL = 1.
+
+Activar la replicaciÓn:
+
+mysql> START SLAVE;
+
+Determinar el estado de los esclavo de replicación en el nodo 1:
+
+mysql> SHOW SLAVE STATUS \G
+
+#############################
+# Replicación Cifrada (SSL) #
+#############################
+
+La replicación cifrada depende de la capacidad "built-in" de MySQL para cifrar las conexiones (SSL), inactiva por defecto.
+
+NOTA: En este caso se usó CentOS con MySQL 5.7 instalado desde el Software Collection, siendo la ruta de configuracion /etc/opt/rh/rh-mysql57/, pero generalmente la ruta es /etc/mysql en la cual se tendría que crear una carpeta denominada /etc/mysql/certs.
+
+En ambos nodos se debe ingresar en la carpeta de configuración MySQL y crear la carpeta "certs":
+
+cd /etc/opt/rh/rh-mysql57/
+mkdir certs
+cd certs
+
+Crear el "cert.sh" con el siguiente contenido:
+
+#!/bin/bash
+
+# --- Certificado de Autoridad Raiz ---
+# Create CA certificate
+#openssl genrsa 2048 > ca-key.pem
+#openssl req -new -x509 -nodes -days 3600 \
+#        -key ca-key.pem -out ca-cert.pem
+# --- Certificado de Autoridad Raiz ---
+
+# Create server certificate, remove passphrase, and sign it
+# server-cert.pem = public key, server-key.pem = private key
+openssl req -newkey rsa:2048 -days 3600 \
+        -nodes -keyout server-key.pem -out server-req.pem
+openssl rsa -in server-key.pem -out server-key.pem
+openssl x509 -req -in server-req.pem -days 3600 \
+        -CA ca-cert.pem -CAkey ca-key.pem -set_serial 01 -out server-cert.pem
+
+# Create client certificate, remove passphrase, and sign it
+# client-cert.pem = public key, client-key.pem = private key
+openssl req -newkey rsa:2048 -days 3600 \
+        -nodes -keyout client-key.pem -out client-req.pem
+openssl rsa -in client-key.pem -out client-key.pem
+openssl x509 -req -in client-req.pem -days 3600 \
+        -CA ca-cert.pem -CAkey ca-key.pem -set_serial 01 -out client-cert.pem
+
+openssl verify -CAfile ca-cert.pem server-cert.pem client-cert.pem
+
+openssl x509 -text -in ca-cert.pem
+openssl x509 -text -in server-cert.pem
+openssl x509 -text -in client-cert.pem
+
+chown root:mysql *.pem;
+chmod 640 *-key.pem;
+chmod 644 *-cert.pem;
+chmod 644 client*.pem;
+
+En el nodo maestro ejecutar el script, previamente descomentando las lineas "--- Certificado de Autoridad Raiz ---":
+
+./certs.sh
+
+Para generar los certificados (ca¨*.pem, server*.pem y client*.pem) introduzca los siguientes datos:
+
+Country Name (2 letter code) [XX]: VE
+State or Province Name (full name) [Some-State]: DC
+Locality Name (eg, city) []: CCS
+Organization Name (eg, company) [Internet Widgits Pty Ltd]: Empresa
+Common Name (e.g. server FQDN or YOUR name) []: FQDN del nodo MAESTRO (/etc/hosts, DNS)
+
+Copiar los certificados raíces al nodo esclavo:
+
+scp ca*.pem <usuario>@<esclavo-mysql>:~
+
+mv /home/<usuario>/ca*.pem /etc/opt/rh/rh-mysql57/certs/
+
+En el nodo esclavo ejecutar el scripts manteniendo comentadas las líneas "--- Certificado de Autoridad Raiz ---":
+
+./certs.sh
+
+Para generar los certificados (solamente server*.pem y client*.pem) introduzca los siguientes datos:
+
+Country Name (2 letter code) [XX]: VE
+State or Province Name (full name) [Some-State]: DC
+Locality Name (eg, city) []: CCS
+Organization Name (eg, company) [Internet Widgits Pty Ltd]: Empresa
+Common Name (e.g. server FQDN or YOUR name) []: FQDN del nodo ESCLAVO (/etc/hosts, DNS)
+
+En ambos nodos agregar en el archivo my.cnf.d/ssl.cnf (/etc/mysql/my.cnf) los siguientes parámetros colocando la ruta completa de los archivos:
+
+[mysqld]
+# Activacion de SSL para que pueda ser utilizado en la replicacion
+ssl-ca=/etc/opt/rh/rh-mysql57/certs/ca.pem
+ssl-cert=/etc/opt/rh/rh-mysql57/certs/server-cert.pem
+ssl-key=/etc/opt/rh/rh-mysql57/certs/server-key.pem
+
+[client]
+# Activacion de SSL para que pueda ser utilizado en la replicacion
+ssl-ca=/etc/opt/rh/rh-mysql57/certs/ca.pem
+ssl-cert=/etc/opt/rh/rh-mysql57/certs/client-cert.pem
+ssl-key=/etc/opt/rh/rh-mysql57/certs/client-key.pem
+
+Reinicie el servidor de MySQL:
+
+service rh-mysql57-mysqld restart
+
+Verifique en el log que no se registran errores con respecto a SSL:
+
+2017-12-18T12:37:21.340705Z 0 [Note] InnoDB: Buffer pool(s) load completed at 171218  8:37:21
+2017-12-18T12:37:21.545750Z 0 [Note] Skipping generation of SSL certificates as options related to SSL are specified.
+2017-12-18T12:37:21.563278Z 0 [Warning] CA certificate /etc/opt/rh/rh-mysql57/certs/ca.pem is self signed.
+2017-12-18T12:37:21.563467Z 0 [Note] Skipping generation of RSA key pair as key files are present in data directory.
+2017-12-18T12:37:21.564579Z 0 [Note] Server hostname (bind-address): '*'; port: 3306
+
+Algunos errores comunes se deben a rutas incorrectas a los archivos o falta de permisos para MySQL:
+
+[Warning] Failed to set up SSL because of the following SSL library error: SSL_CTX_set_default_verify_paths failed
+
+Algunos errores comunes se deben a fallos de configuración SSL en el servidor maestro:
+
+Slave I/O for channel '': error connecting to master 'replica@vdaycopass.daycopass.local:3306' - retry-time: 60  retries: 11, Error_code: 2026
+
+Detenga, reconfigure y reactive la replicación nuevamente pero con soporte SSL activado (en ambos nodos si es una replicación bidireccional):
+
+mysql> STOP SLAVE;
+
+CHANGE MASTER TO MASTER_HOST = 'host', MASTER_PORT = 'port', MASTER_USER = 'user', MASTER_PASSWORD = 'password', MASTER_AUTO_POSITION = 1, MASTER_SSL = 1;
+
+mysql> START SLAVE;
+
+Determinar el estado de los esclavos de replicación:
+
+mysql> SHOW SLAVE STATUS \G
+
+#############
+ REFERENCIAS
+#############
+
+http://dev.mysql.com/doc/refman/5.0/en/server-system-variables.html
+http://dev.mysql.com/doc/refman/4.1/en/innodb-parameters.html
+
+http://dev.mysql.com/doc/refman/5.0/en/replication.html
+http://dev.mysql.com/doc/refman/5.0/en/replication-options-master.html
+https://dev.mysql.com/doc/refman/5.0/en/replication-features-userprivs.html
+https://dev.mysql.com/doc/refman/5.0/en/replication-rules.html
+http://dev.mysql.com/doc/refman/5.0/es/show-slave-status.html
+
+http://dev.mysql.com/doc/refman/5.1/en/mysql-cluster-replication-multi-master.html
+http://dev.mysql.com/doc/refman/5.1/en/replication-options-slave.html#option_mysqld_log-slave-updates
+https://dev.mysql.com/doc/refman/5.0/en/replication-options-slave.html#option_mysqld_replicate-wild-ignore-table
+
+https://dev.mysql.com/doc/refman/5.6/en/replication-options.html
+
+https://dev.mysql.com/doc/refman/5.7/en/replication-sbr-rbr.html
+https://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html
+https://dev.mysql.com/doc/refman/5.7/en/replication-howto-repuser.html
+https://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterstatus.html
+https://dev.mysql.com/doc/refman/5.7/en/replication-snapshot-method.html
+https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-concepts.html
+https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-howto.html
+https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-failover.html
+
+https://www.percona.com/blog/2009/05/14/why-mysqls-binlog-do-db-option-is-dangerous/
+
+https://www.digitalocean.com/community/tutorials/how-to-set-up-master-slave-replication-in-mysql
+http://www.rackspace.com/knowledge_center/article/mysql-replication-masterslave
+http://schworak.com/blog/e55/mysql-and-bidirectional-replication-aka-master-master
+
+http://stackoverflow.com/questions/15746234/bi-directional-replication-for-the-same-mysql-table
+http://www.admin-hints.com/2009/04/mysql-bi-directional-table-replication.html
+http://www.ovaistariq.net/565/setting-up-master-slave-replication-with-mysql
+https://www.howtoforge.com/setting-up-master-master-replication-on-four-nodes-with-mysql-5-on-debian-etch-p2
+
+https://dev.mysql.com/doc/refman/5.7/en/replication-solutions-encrypted-connections.html
+https://dev.mysql.com/doc/refman/5.7/en/using-encrypted-connections.html
+https://dev.mysql.com/doc/refman/5.7/en/creating-ssl-files-using-openssl.html

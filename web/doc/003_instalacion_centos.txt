@@ -1,0 +1,309 @@
+# Instalacion
+
+# Sistema Operativo (Certificado): 
+CentOS Linux 6.09 Minimal Edition 64 bits
+
+#########################################################################
+# A partir de aqui todos los comandos se ejecutan como root o con sudo! #
+#########################################################################
+
+# Las versiones de Apache, MySQL y PHP requeridas estan disponibles en los
+repositorios EPEL (Extras) y SCL (Software Collections).
+
+# Instalar repositorios adicionales
+yum install epel-release
+yum install centos-release-scl
+
+# Actualice paquetes el sistma operativo (seguridad)
+yum update
+
+# Desactive todos los servicios innecesarios (Algunos Ejemplos)
+# especialmente si no se requiere interfaz grafica X
+# Utilizando por ejemplo el siguiente script
+
+#!/bin/bash
+
+function chkon
+{
+        chkconfig $1 on
+}
+
+
+function chkoff
+{
+        chkconfig $1 off
+}
+
+chkoff autofs
+chkoff abrtd
+chkoff irqbalance
+chkoff rpcbind
+
+# Instalar utilidades de administracion
+yum install htop mc
+
+# Instalar MySQL 5.7
+yum install rh-mysql57-mysql rh-mysql57 rh-mysql57-mysql-server
+
+# Instalar PHP 5.6 con Fast PHP Module (FPM)
+yum install rh-php56
+yum install rh-php56-php-imap rh-php56-php-ldap rh-php56-php-json rh-php56-php-mcrypt rh-php56-php-cli rh-php56-php-mysql
+yum install rh-php56-php-fpm
+
+# Instalar Subversion (Utilidades)
+yum install sclo-subversion19-subversion-tools
+
+# Instalar Apache 2.4
+yum install httpd24 httpd24-httpd
+
+# Instalar modulos requeridos por PHPMyAdmin (Solo en Desarrollo)
+yum install rh-php56-php-gd rh-php56-php-mbstring
+
+# Cree algunos acceso directorios en /root
+cd
+ln -s /opt/rh/httpd24/root/var/www/html httpd-www
+ln -s /var/log/httpd24/ httpd-log
+ln -s /opt/rh/httpd24/root/etc/httpd httpd-etc
+ln -s /etc/opt/rh/rh-mysql57 mysql-etc
+ln -s /var/opt/rh/rh-mysql57/log mysql-log
+ln -s /var/opt/rh/rh-mysql57/lib/mysql mysql-var
+ln -s /var/opt/rh/rh-php56/log/php-fpm/ php-fpm-log
+ln -s /etc/opt/rh/rh-php56/php-fpm.conf
+ln -s /etc/opt/rh/rh-php56/php.ini
+ln -s /opt/rh
+
+# Los directorios relativos html, httpd y rh serán usados más adelante.
+
+# Nombre de los servicios reiniciable (Apache/FPM/MySQL): 
+chkconfig --list | egrep -i "mysql|httpd|fpm"
+
+# Crear el archivo /etc/scl.sh de activacion de las colecciones con 
+# los siguientes comandos a ejecutar:
+
+source scl_source enable httpd24
+source scl_source enable rh-mysql57
+source scl_source enable rh-php56
+source scl_source enable sclo-subversion19
+
+# Cambiar los permisos de ejecucion
+
+chmod 755  /etc/scl.sh
+
+# Para habilitar permanentemente las colecciones instaladas en "/opt/rh"
+# se requiere añadir las siguientes lineas en ~/.bashrc de root:
+
+source /etc/scl.sh
+
+# Salga e inicie sesión nuevamente como superusuario "root"
+exit
+
+# Verificar la existen de dos modulos de Apache: 
+httpd -M | egrep "rewrite|headers"
+
+# Iniciar el servicio de MySQL 
+service rh-mysql57-mysqld start
+
+# Configurar clave "123miclave" de root de MySQL
+mysql
+mysql> select host,user,authentication_string from mysql.user;
+mysql> set password for root@localhost=password("123miclave");
+
+# Configurar el servicio FPM:
+vim /opt/rh/rh-php56/register.content/etc/opt/rh/rh-php56/php-fpm.d/www.conf
+
+*** Dejar todo por defecto en este archivo ***
+
+# Reiniciar el servicio FPM:
+service rh-php56-php-fpm restart
+
+# Forzar la redireccion de HTTP hacia HTTPS por defecto en Apache.
+
+vim /opt/rh/httpd24/root/etc/httpd/conf.d/ssl-force.conf
+
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule (.*) https://%{HTTP_HOST}%{REQUEST_URI}
+
+# Configurar Proxy hacia FPM (https://httpd.apache.org/docs/2.4/mod/mod_proxy_fcgi.html)
+# y restriccion de acceso por IP especifica para PhpMyAdmin
+
+vim /opt/rh/httpd24/root/etc/httpd/conf.d/phpmyadmin.conf
+
+ProxyPassMatch "^/phpmyadmin/(.*.php)$" "fcgi://127.0.0.1:9000/opt/rh/httpd24/root/var/www/html"
+<Location /phpmyadmin>
+        # Olaf Reitmaier
+        Order Allow,Deny
+        Allow from 10.0.0.137
+</Location>
+
+# El ajuste de seguridad ante ataques de DDoS
+# con el modulo "evasive" porque no es compatible
+# con la instalacion del software collections
+
+# Reiniciar el servidor Apache:
+service httpd24-httpd restart
+
+# Colocar (temporalmente) un archivo de pruebas:
+
+vim /opt/rh/httpd24/root/var/www/html/info.php
+
+<?php
+phpinfo();
+
+# Probar el archivo (y luego borrarlo) visitando:
+
+http://<IP>/info.php
+https://<IP>/info.php
+
+# Descargue e instale PHPMyAdmin 4.7.2 (Solo en Desarrollo)
+cd /root/html 
+unzip /root/phpMyAdmin-4.7.2-all-languages.zip
+mv phpMyAdmin-4.7.2-all-languages phpmyadmin
+
+# Incrementar niveles de seguridad en Apache:
+
+vim /root/httpd/conf.d/security.conf
+
+ServerTokens Minimal
+ServerSignature Off
+TraceEnable Off
+Header set X-Content-Type-Options: "nosniff"
+Header set X-Frame-Options: "sameorigin"
+# https://www.owasp.org/index.php/HTTP_Strict_Transport_Security
+Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+# Mejorar configuracion SSL de Apache:
+
+vim /root/httpd/conf.d/ssl.conf
+
+SSLProtocol all -SSLv3 -SSLv2
+SSLCipherSuite AES128+EECDH:AES128+EDH
+SSLCompression off
+SSLInsecureRenegotiation off
+
+# Configurar las variables globales de PHP:
+
+vim /root/php.ini
+
+expose_php = Off
+display_errors = Off
+log_errors = On
+session.gc_maxlifetime = 21600
+session.cookie_secure = 1
+session.cookie_lifetime = 21600
+session.cookie_httponly = 1
+date.timezone = America/Caracas
+
+# Deshabilite SELinux (Compatibilidad)
+sudo vim /etc/selinux/config
+
+SELINUX=disabled
+
+# Configuracion de bitacoras (LOG)
+vim /etc/rsyslog.d/00-daycopass.conf
+
+:syslogtag,contains,"daycopass[" /var/log/daycopass/daycopass.log
+& ~
+
+# Configurar la rotacion de la bitacora (LOG)
+mkdir /var/log/daycopass
+vim /etc/logrotate.d/daycopass
+
+/var/log/daycopass/daycopass.log {
+  daily
+  rotate 1000
+  missingok
+  compress
+  delaycompress
+  notifempty
+  create 640 root root
+}
+
+# Probar la rotacion de la bitacora
+logrotate -dv -f /etc/logrotate.d/daycopass
+
+# Crear usuario de sistema operativo (daycopass or another)
+adduser daycopass --shell /bin/bash
+
+# Agregar el usuario en el /etc/sudoers
+visudo 
+
+daycopass       ALL=(ALL:ALL) ALL
+
+# Habilitar permanentemente las colecciones instaladas en "/opt/rh"
+# se requiere añadir las siguientes lineas en ~/.bashrc antes de
+# iniciar sesion como el usuario daycopass:
+
+source /etc/scl.sh
+
+###############################################################################
+# Apartir de aqui todos los comandos se ejecutan como el usuario daycopass!!! #
+###############################################################################
+
+# Iniciar sesion como usuario de sistema operativo
+# para instalar (de aqui en adelante) en el directorio
+# del usuario /home/daycopass
+su - daycopass
+
+# Crear el archivo de inicio de la aplicacion segun se describe en CONFIG.TXT
+# Hacer un respaldo del archivo .ini (si existe previamente)
+vim ~/daycopass.ini
+
+# Generar los certificados SSL (Y copiar a los servidores espejo si existen)
+# Hacer un respaldo de los archivos apache.* (si existen previamente)
+openssl req -x509 -nodes -days 900 -newkey rsa:2048 -keyout apache.key -out apache.crt
+
+# Hacer un respaldo del directorio daycopass (si existe previamente)
+mv daycopass daycopass.old.$RANDOM
+
+# OPCION 1: De un respaldo de codigo fuente (tar.gz)
+tar xvfz daycopass.tar.gz
+
+# OPCION 2: Del repositorio SVN (Subversion) de codigo fuente (version?)
+# ubicado en el servidor "svndayco" debe estar definido en /etc/hosts
+svn co --force https://W.X.Y.Z:8080/svn/daycopass/tags/v2.0 daycopass --username=<usuario>
+svn co --force https://W.X.Y.Z:8080/svn/daycopass/tags/v1.0 daycopass --username=<usuario>
+svn co --force https://W.X.Y.Z:8080/svn/daycopass/trunk/ daycopass --username=<usuario>
+
+# Aplicar Configuracion del Servidor Web (Apache) pasando los
+# parametros <Usuario> <Dominio> <Puerto-SSL>
+chmod +x ./daycopass/virtualhost-centos.sh
+sudo ./daycopass/virtualhost-centos.sh daycopass daycopass.daycohost.local 443
+
+# Ajuste de permisos (Directorios 750 y Archivos 640)
+chmod +x ./daycopass/permissions.sh
+./daycopass/permissions.sh
+
+# Creacion de la base de datos (Schema) 
+mysql -u root -p
+mysql> create database `daycopass`;
+mysql> create user daycopass@localhost identified by "**********";
+nysql> grant all privileges on daycopass.* to daycopass@localhost;
+
+# Restauracion de datos (tablas y regitros)
+# Cuidado esto elimina las tablas existentes!!!
+cd ~/daycopass
+
+# Respaldo de archivos y base de datos (cifrada)
+~/daycopass/restore.sh 
+
+# Base de datos vacia (sin registros solo esquema)
+cd ~/daycopass
+php dbrestore.php ~/daycopass/doc/999_base_de_datos.sql
+
+# Probar envio de correo electronico en DaycoPass
+cd ~/daycopass
+php mailtest.php
+
+# Ejecutar un respaldo
+~/daycopass/backup.sh
+
+# Configurar la tarea programa de respaldo
+crontab -e
+
+SHELL=/bin/bash
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=root
+
+00 21 *  *  *  ~/daycopass/backup.sh | grep -v "Using a password on the command line interface can be insecure"
+

@@ -1,0 +1,139 @@
+<!DOCTYPE HTML>
+
+<html>
+
+    <head>
+        <title>Dayco Mole</title>
+				<link rel="stylesheet" href="js/jquery-ui-themes-1.11.4/themes/south-street/jquery-ui.min.css">
+				<script type="text/javascript" src="js/jquery-1.11.2.min.js"></script>
+				<script type="text/javascript" src="js/jquery-ui-1.11.4/jquery-ui.min.js"></script>
+    </head>
+
+    <body>
+
+        <!-- Guacamole -->
+        <script type="text/javascript"
+            src="guacamole-common-js/all.min.js"></script>
+
+				<!-- Clipboard Window -->
+				<div id="clipboard" style="display: none;">
+					<div align="center">
+						<textarea id="clipboard_data" rows="15" cols="40"></textarea>
+					</div>
+				</div>			
+
+				<!-- Panel -->
+				<div id="custom_panel">
+					<button id="btn_clip_show"  onclick="showClipboard();">Portapapeles</button>					
+					<!-- <button id="btn_clip_paste" onclick="guiCopy2Clipboard();">Paste</button> -->
+				</div>	
+
+        <!-- Display -->
+        <div id="display"></div>
+
+        <!-- Init -->
+        <script type="text/javascript"> /* <![CDATA[ */
+					
+            // Get display div from document
+            var display = document.getElementById("display");
+
+						// Create the tunnel
+						var tunnel = new Guacamole.HTTPTunnel("tunnel");
+						
+						// On disconnect
+						tunnel.onstatechange = function (state){
+							if (state == 2) guac.disconnect();
+						};
+	
+            // Instantiate client, using an HTTP tunnel for communications.
+            var guac = new Guacamole.Client(tunnel);
+					
+            // Add client to display div
+            display.appendChild(guac.getDisplay().getElement());
+            
+            // Error handler
+            guac.onerror = function(error) {
+                alert(error);
+            };
+
+						// Push query string
+						querystring = location.search;
+						if (querystring.substr(0,1)=="?")	{
+							querystring = location.search.substr(1);
+						} 
+
+            // Connect
+            guac.connect(querystring);
+
+						// On disconnect
+						guac.onstatechange = function (state){
+							if (state == 5) alert("Disconnected");
+						};
+	
+            // Disconnect on close
+            window.onunload = function() {
+                guac.disconnect();
+            };
+
+            // Mouse Events
+            var mouse = new Guacamole.Mouse(guac.getDisplay().getElement());
+
+            mouse.onmousedown = 
+            mouse.onmouseup   =
+            mouse.onmousemove = function(mouseState) {
+                guac.sendMouseState(mouseState);
+            };
+
+            // Keyboard Events
+            var keyboard = new Guacamole.Keyboard(document);
+
+            keyboard.onkeydown = function (keysym) {
+								guac.sendKeyEvent(1, keysym);
+								if (keyboard.modifiers.alt && keyboard.modifiers.ctrl && keyboard.modifiers.shift){
+									showClipboard();
+								}
+            };
+
+            keyboard.onkeyup = function (keysym) {
+								guac.sendKeyEvent(0, keysym);
+            };
+
+						// Clipboard (Fill local textarea with remote clipboard)
+						guac.onclipboard = function(stream, mimetype){
+							var inputr = new Guacamole.StringReader(stream);
+							inputr.ontext = function(text){
+								$("#clipboard_data").val(text);
+							}; 
+						}
+
+						// Clipboard (Fill remote clipboard with the local textarea)
+						function guiCopy2Clipboard(){
+							var output = guac.createClipboardStream("text/plain", "clipboard");
+							var outputw = new Guacamole.StringWriter(output);
+							outputw.sendText(document.getElementById("clipboard_data").value);
+							outputw.sendEnd();
+							guac.endStream(output.index);	
+						}
+					
+						// Clipboard (Auto fill remote when paste on local text area)	
+						$("#clipboard").on("input paste", function (event){
+								if (event.type=="input"){
+									guiCopy2Clipboard(); 
+								} 
+							} 
+						);
+
+						// Show Clipboard Text
+						function showClipboard(){
+							$("#clipboard").dialog({
+								title: "Portapapeles", modal: true, width: 500, height: 450
+								, resizable: true, closeOnEscape: true
+								, position: {my: "center top", at: "center top", of: window}
+							});
+						}	
+
+        /* ]]> */ </script>
+
+    </body>
+
+</html>
