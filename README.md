@@ -44,7 +44,7 @@ Password Vault Web Application written in PHP &amp; MySQL
 + DataTables v1.10.12 - https://datatables.net/
 + Chosen v1.6.3 - https://harvesthq.github.io/chosen/
 + Secure Image PHP Captcha v3.6.4 - https://www.phpcaptcha.org/
-+ PHPMailer v5.2.16 - https://github.com/PHPMailer/PHPMailer
++ PHPMailer v5.2.28 - https://github.com/PHPMailer/PHPMailer
 
 ### v1.0
 
